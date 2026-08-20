@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Environment / secrets
+.env
+.env.*
+
+# Node
+node_modules/
+dist/
+build/
+
+# Runs (local simulation artifacts)
+runs/*.db
+runs/*.db-wal
+runs/*.db-shm
+
+# OS / editor
+.DS_Store
+Thumbs.db
