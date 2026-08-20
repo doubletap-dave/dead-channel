@@ -93,7 +93,7 @@ DEFCON is used (not a fictional clone) because audiences understand it instantly
 
 ## 7. Actions & Deception
 
-19 national actions, one per turn, chosen by each HoS. Every action must change (a) true state, (b) the enemy's information environment, or (c) own future option space — ideally two of three. Actions that can't justify themselves on that rule get cut.
+21 national actions (the brief's 19 plus raise/lower readiness split into one action with a direction parameter and three distinct invest targets — distinct members keep the resolver simple), one per turn, chosen by each HoS. Every action must change (a) true state, (b) the enemy's information environment, or (c) own future option space — ideally two of three. Actions that can't justify themselves on that rule get cut.
 
 - **Military:** adjust readiness (one action with a direction parameter: raise/lower), reposition forces, conduct exercise, covert mobilization
 - **Intelligence:** increase surveillance, verify report, plant false intelligence, attempt infiltration
