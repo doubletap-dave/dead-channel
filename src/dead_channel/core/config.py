@@ -44,6 +44,13 @@ class SimParams(pydantic.BaseModel):
             raise ValueError("defcon_bands must be 3 strictly ascending values")
         return v
 
+    @pydantic.field_validator("trust_half_life", "claim_error_scale")
+    @classmethod
+    def _positive(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("trust_half_life and claim_error_scale must be > 0")
+        return v
+
     @pydantic.field_validator("reports_per_turn_range")
     @classmethod
     def _range_sane(cls, v: tuple[int, int]) -> tuple[int, int]:

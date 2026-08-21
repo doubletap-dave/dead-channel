@@ -51,6 +51,17 @@ def test_reports_per_turn_range_validated():
         SimParams(reports_per_turn_range=(5, 3))
 
 
+def test_positive_scale_params_validated():
+    with pytest.raises(pydantic.ValidationError):
+        SimParams(trust_half_life=0.0)
+    with pytest.raises(pydantic.ValidationError):
+        SimParams(trust_half_life=-1.0)
+    with pytest.raises(pydantic.ValidationError):
+        SimParams(claim_error_scale=0.0)
+    with pytest.raises(pydantic.ValidationError):
+        SimParams(claim_error_scale=-5.0)
+
+
 def test_model_matrix_default():
     assert ModelMatrix().default == "openai:gpt-5-mini"
     assert ModelMatrix().states == {}
