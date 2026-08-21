@@ -49,6 +49,7 @@ _STATE_SCOPED_TYPES = frozenset[str](
         _PLANTED,
         "observation.generated",
         _CONTACT,
+        "agent.activity",
     }
 )
 

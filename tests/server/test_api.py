@@ -188,7 +188,10 @@ async def test_stop_then_resume_completes_at_total_turns(tmp_path):
         # and no further turns may run.
         handle = test_app.state.run_manager.handle("stoppable")
         caller = handle.runner.caller if handle.runner else None
-        assert caller is not None and hasattr(caller, "_gate"), "gated caller missing"
+        assert caller is not None, "runner missing"
+        while hasattr(caller, "_inner"):
+            caller = caller._inner  # unwrap telemetry decorator
+        assert hasattr(caller, "_gate"), "gated caller missing"
         caller._gate.set()  # noqa: SLF001 - test reaches into its own double
         for _ in range(200):
             events_after_stop = (await client.get("/runs/stoppable/events")).json()
@@ -211,6 +214,37 @@ async def test_stop_then_resume_completes_at_total_turns(tmp_path):
 async def test_stop_without_start_is_not_running(client):
     await client.post("/runs", json={"seed": 12, "turns": 2, "runId": "idle"})
     assert (await client.post("/runs/idle/stop")).json() == {"status": "not-running"}
+
+
+class _ExplodingCaller:
+    """Caller whose first real call raises — simulates a missing/invalid key."""
+
+    async def call(self, model_str: str, result_type: type, prompt: str, call_site: str) -> object:
+        raise RuntimeError("Set the `OPENROUTER_API_KEY` environment variable")
+
+    async def fail(self) -> None:
+        return None
+
+
+async def test_caller_failure_surfaces_as_run_failed(tmp_path):
+    """A dead LLM call must land in the event log as run.failed, not vanish."""
+    test_app = create_app(runs_dir=tmp_path, caller_factory=lambda: _ExplodingCaller())
+    from httpx import ASGITransport, AsyncClient
+
+    async with AsyncClient(transport=ASGITransport(app=test_app), base_url="http://test") as client:
+        await client.post("/runs", json={"seed": 13, "turns": 2, "runId": "doomed"})
+        await client.post("/runs/doomed/start")
+        for _ in range(200):
+            events = (await client.get("/runs/doomed/events")).json()
+            if any(e["type"] == "run.failed" for e in events):
+                break
+            await asyncio.sleep(0.05)
+        failed = [e for e in events if e["type"] == "run.failed"]
+        assert failed, f"run.failed missing; got {[e['type'] for e in events]}"
+        assert "OPENROUTER_API_KEY" in str(failed[0]["payload"]["error"])
+        # And the failure is replayable for the observer endpoint.
+        state = (await client.get("/runs/doomed/observer/state")).json()
+        assert state["runId"] == "doomed"
 
 
 async def test_catalog_unknown_provider_400(client):

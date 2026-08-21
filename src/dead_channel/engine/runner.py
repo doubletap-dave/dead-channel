@@ -6,7 +6,10 @@ TurnState at every turn boundary; a crash mid-turn loses that turn's remainder
 """
 
 from pathlib import Path
+from typing import TypeVar
 
+from dead_channel.agents.activity import EVENT_TYPE as ACTIVITY_EVENT
+from dead_channel.agents.activity import verb_for
 from dead_channel.agents.calls import ModelResolver
 from dead_channel.core.config import RunConfig
 from dead_channel.core.events import Event, make_event
@@ -44,6 +47,8 @@ from dead_channel.engine.turn_ops import advisor_assessments, render_reports
 from dead_channel.engine.verification import verify_attribute
 from dead_channel.providers.caller import Caller, persist_prompt
 
+T = TypeVar("T")
+
 
 class TurnRunner(TurnHost):
     def __init__(
@@ -56,7 +61,7 @@ class TurnRunner(TurnHost):
     ) -> None:
         self.store = store
         self.bus = bus
-        self.caller = caller
+        self.caller = _TrackingCaller(caller, self)
         self.config = config
         self.runs_dir = runs_dir
         self.rng = SeededRNG(config.seed)
@@ -134,6 +139,24 @@ class TurnRunner(TurnHost):
             self._stop_logged = True
             self.emit_payload("run.stopped", self._current_turn(), {"turn": self._current_turn()})
 
+    def emit_activity(self, state: str, role: str, model: str, action: str) -> Event:
+        """Live agent telemetry; observer-visible only (never prompt content)."""
+        turn = self._current_turn()
+        return self.emit(
+            ACTIVITY_EVENT,
+            turn,
+            state=state,
+            role=role,
+            model=model,
+            action=action,
+            phase=action,
+        )
+
+    def log_failure(self, message: str) -> Event:
+        return self.emit_payload(
+            "run.failed", self._current_turn(), {"turn": self._current_turn(), "error": message}
+        )
+
     def _current_turn(self) -> int:
         return project_world(self.store.replay()).turn
 
@@ -146,6 +169,7 @@ class TurnRunner(TurnHost):
 
         batch_reports = self._observations(turn)
         for observer in StateID:
+            self._active_state = observer.value
             payloads = [r for r in batch_reports if r.about is other(observer)]
             await render_reports(self, turn, observer, payloads)
             await self._pending_verification(turn, observer)
@@ -162,6 +186,7 @@ class TurnRunner(TurnHost):
             )
             for state_id in StateID
         }
+        self._active_state = None
         results = self._resolve_all(turn, decisions)
         self._threat_and_diplomacy(turn, decisions, results, self.world())
         adjudicate_horizon(self, state, turn, self.store.replay())
@@ -247,3 +272,37 @@ class TurnRunner(TurnHost):
         score_claims_on_attribute(
             self, self._state, observer, pending.attribute, payload.value, turn
         )
+
+
+class _TrackingCaller:
+    """Wraps the Caller so every LLM call emits agent.activity start/done/failed.
+
+    The role for a call site is derived from its name (assessment_* carries the
+    role; report_render is the intel chief's shop; hos_decision is the HoS).
+    """
+
+    def __init__(self, inner: Caller, host: TurnHost) -> None:
+        self._inner = inner
+        self._host = host
+
+    @staticmethod
+    def _role_of(call_site: str) -> str:
+        if call_site.startswith("assessment_"):
+            return call_site.removeprefix("assessment_")
+        if call_site == "hos_decision":
+            return "head_of_state"
+        return "intelligence_chief"
+
+    async def call(self, model_str: str, result_type: type[T], prompt: str, call_site: str) -> T:
+        state = getattr(self._host, "_active_state", None)
+        role = self._role_of(call_site)
+        self._host.emit_activity(state or "observer", role, model_str, verb_for(call_site))
+        try:
+            result = await self._inner.call(model_str, result_type, prompt, call_site)
+        except Exception:
+            self._host.emit_activity(state or "observer", role, model_str, "failed")
+            raise
+        self._host.emit_activity(
+            state or "observer", role, model_str, f"done: {verb_for(call_site)}"
+        )
+        return result

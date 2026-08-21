@@ -4,6 +4,8 @@ EVENT_TYPES = frozenset[str](
     {
         "run.started",
         "run.stopped",
+        "run.failed",
+        "agent.activity",
         "turn.started",
         "world.ticked",
         "observation.generated",

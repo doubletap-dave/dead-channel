@@ -88,6 +88,10 @@ class RunManager:
         async def drive() -> None:
             try:
                 await runner.run(remaining)
+            except Exception as exc:
+                # A dead run must be visible in the story, not just the console:
+                # log run.failed so SSE clients (and replays) see why it halted.
+                runner.log_failure(f"{type(exc).__name__}: {exc}")
             finally:
                 store.close()
 

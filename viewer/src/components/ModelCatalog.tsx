@@ -1,25 +1,38 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   PROVIDERS,
+  fetchAllCatalogs,
   fetchCatalogs,
   fetchKeys,
   setKey,
+  type CatalogResult,
   type KeysStatus,
   type ModelInfoView,
-  type ProviderId,
 } from "../api/client";
 
-interface CatalogState {
+interface ProviderCatalog {
   models: ModelInfoView[];
   error: string | null;
-  loading: boolean;
 }
 
-const initialCatalog: Record<ProviderId, CatalogState> = {
-  openrouter: { models: [], error: null, loading: false },
-  openai: { models: [], error: null, loading: false },
-  perplexity: { models: [], error: null, loading: false },
-};
+type Catalogs = Record<string, ProviderCatalog>;
+
+function summarize(results: CatalogResult[]): { catalogs: Catalogs; loaded: number; problems: string[] } {
+  const catalogs: Catalogs = {};
+  const problems: string[] = [];
+  let loaded = 0;
+  for (const result of results) {
+    catalogs[result.provider] = { models: result.models, error: result.error };
+    if (result.error) {
+      problems.push(`${result.provider}: ${result.error}`);
+    } else if (result.models.length === 0) {
+      problems.push(`${result.provider}: no key set`);
+    } else {
+      loaded += result.models.length;
+    }
+  }
+  return { catalogs, loaded, problems };
+}
 
 function KeysPanel({ keys, onSaved }: { keys: KeysStatus | null; onSaved: () => void }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -54,22 +67,25 @@ function KeysPanel({ keys, onSaved }: { keys: KeysStatus | null; onSaved: () => 
                 {provider}
                 {entry?.set ? ` · saved (${entry.masked})` : " · not set"}
               </span>
-              <input
-                type="password"
-                autoComplete="off"
-                placeholder={entry?.set ? "replace key" : "paste key"}
-                value={drafts[provider] ?? ""}
-                onChange={(event) =>
-                  setDrafts((prev) => ({ ...prev, [provider]: event.target.value }))
-                }
-              />
-              <button
-                type="button"
-                disabled={busy === provider || !(drafts[provider] ?? "").trim()}
-                onClick={() => void save(provider)}
-              >
-                {busy === provider ? "saving…" : "save"}
-              </button>
+              <div className="config-key-row">
+                <input
+                  type="password"
+                  autoComplete="off"
+                  placeholder={entry?.set ? "replace key" : "paste key"}
+                  value={drafts[provider] ?? ""}
+                  onChange={(event) =>
+                    setDrafts((prev) => ({ ...prev, [provider]: event.target.value }))
+                  }
+                />
+                <button
+                  type="button"
+                  className="btn-theme"
+                  disabled={busy === provider || !(drafts[provider] ?? "").trim()}
+                  onClick={() => void save(provider)}
+                >
+                  {busy === provider ? "…" : "save"}
+                </button>
+              </div>
             </label>
           );
         })}
@@ -80,8 +96,11 @@ function KeysPanel({ keys, onSaved }: { keys: KeysStatus | null; onSaved: () => 
 }
 
 export function ModelCatalog() {
-  const [catalogs, setCatalogs] = useState(initialCatalog);
+  const [catalogs, setCatalogs] = useState<Catalogs>({});
   const [keys, setKeys] = useState<KeysStatus | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [statusLine, setStatusLine] = useState("no catalogs loaded yet");
+  const [problems, setProblems] = useState<string[]>([]);
 
   const refreshKeys = useCallback(() => {
     void fetchKeys()
@@ -93,57 +112,59 @@ export function ModelCatalog() {
     refreshKeys();
   }, [refreshKeys]);
 
-  const loadProvider = async (provider: ProviderId) => {
-    setCatalogs((prev) => ({
-      ...prev,
-      [provider]: { ...prev[provider], loading: true, error: null },
-    }));
+  const loadAll = async () => {
+    setLoading(true);
+    setProblems([]);
     try {
-      const models = await fetchCatalogs(provider);
-      setCatalogs((prev) => ({
-        ...prev,
-        [provider]: { models, error: models.length === 0 ? "no key set or empty catalog" : null, loading: false },
-      }));
-    } catch (cause) {
-      setCatalogs((prev) => ({
-        ...prev,
-        [provider]: {
-          models: [],
-          error: cause instanceof Error ? cause.message : String(cause),
-          loading: false,
-        },
-      }));
+      // Warm any providers whose keys were just saved but whose catalog
+      // endpoint needs the fresh key in the backend process.
+      await Promise.allSettled(
+        PROVIDERS.filter((p) => keys?.providers[p]?.set).map((p) => fetchCatalogs(p)),
+      );
+      const results = await fetchAllCatalogs();
+      const summary = summarize(results);
+      setCatalogs(summary.catalogs);
+      setProblems(summary.problems);
+      setStatusLine(
+        summary.loaded > 0
+          ? `${summary.loaded} models loaded across ${results.filter((r) => r.models.length > 0).length} provider(s)`
+          : "no models loaded — set a key below and retry",
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
-  const totalModels = PROVIDERS.reduce((sum, p) => sum + catalogs[p].models.length, 0);
+  const totalModels = Object.values(catalogs).reduce((sum, c) => sum + c.models.length, 0);
 
   return (
     <>
-      <div className="config-row">
-        {PROVIDERS.map((provider) => (
-          <button
-            key={provider}
-            type="button"
-            className="btn-catalog"
-            disabled={catalogs[provider].loading}
-            onClick={() => void loadProvider(provider)}
-          >
-            {catalogs[provider].loading ? "…" : `load ${provider} models`}
-          </button>
-        ))}
+      <div className="config-row config-catalog-row">
+        <button type="button" className="btn-theme btn-load-catalogs" disabled={loading} onClick={() => void loadAll()}>
+          {loading ? "loading…" : "⟳ load model catalogs"}
+        </button>
         <span className="config-field-label">
-          {totalModels > 0 ? `${totalModels} models loaded` : "no catalogs loaded yet"}
+          {statusLine}
+          {totalModels > 0 ? "" : ""}
         </span>
       </div>
+      {problems.length > 0 && (
+        <ul className="config-problems">
+          {problems.map((problem) => (
+            <li key={problem}>{problem}</li>
+          ))}
+        </ul>
+      )}
 
       <datalist id="models-all">
-        {PROVIDERS.flatMap((provider) => catalogs[provider].models).map((model) => (
-          <option key={model.id} value={model.id}>
-            {model.context ? `${model.context} ctx` : "context unknown"}
-            {model.supported_parameters?.includes("temperature") ? " · temp" : " · fixed"}
-          </option>
-        ))}
+        {Object.values(catalogs)
+          .flatMap((catalog: ProviderCatalog) => catalog.models)
+          .map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.context ? `${model.context} ctx` : "context unknown"}
+              {model.supported_parameters?.includes("temperature") ? " · temp" : " · fixed"}
+            </option>
+          ))}
       </datalist>
 
       <KeysPanel keys={keys} onSaved={refreshKeys} />

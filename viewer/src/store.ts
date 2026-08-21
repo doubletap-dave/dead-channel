@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import type {
+  AgentActivityView,
   AssessmentView,
   BeliefView,
   ContactView,
@@ -29,6 +30,7 @@ const RESOURCE_ATTRIBUTES: readonly string[] = [
   "military",
   "research",
 ] as const;
+const FEED_LIMIT = 30;
 
 // TODO(T5.1): replace this derivation with a backend `verified` field when available.
 const VERIFIED_THRESHOLD = 0.75;
@@ -58,6 +60,8 @@ const emptyRun = (): RunView => ({
   assessmentsByState: { northstar: [], vesper: [] },
   latestDecisionByState: { northstar: null, vesper: null },
   contacts: [],
+  activityByState: { northstar: [], vesper: [] },
+  failure: null,
   status: "config",
 });
 
@@ -109,6 +113,25 @@ function reduceEvent(run: RunView, event: SimEvent): RunView {
     }
     case "run.stopped": {
       next.status = "stopped";
+      break;
+    }
+    case "run.failed": {
+      next.status = "failed";
+      next.failure = asString(payload.error, "unknown error");
+      break;
+    }
+    case "agent.activity": {
+      if (!isStateId(payload.state)) break;
+      const entry: AgentActivityView = {
+        state: payload.state,
+        role: isRoleId(payload.role) ? payload.role : "head_of_state",
+        model: asString(payload.model),
+        action: asString(payload.action),
+        turn: event.turn,
+      };
+      // Keep the live feed tight: the last N activity lines per state.
+      const feed = [...next.activityByState[payload.state], entry].slice(-FEED_LIMIT);
+      next.activityByState = { ...next.activityByState, [payload.state]: feed };
       break;
     }
     case "threat.updated": {
@@ -332,6 +355,10 @@ export function useRunStatus(): RunView["status"] {
   return useRunStore((state) => state.run.status);
 }
 
+export function useFailure(): string | null {
+  return useRunStore((state) => state.run.failure);
+}
+
 export interface StateFeed {
   assessments: AssessmentView[];
   decision: DecisionView | null;
@@ -339,6 +366,7 @@ export interface StateFeed {
   threat: number;
   beliefs: BeliefView[];
   resources: Record<string, number>;
+  activity: AgentActivityView[];
 }
 
 export function useStateFeed(state: StateId): StateFeed {
@@ -352,6 +380,7 @@ export function useStateFeed(state: StateId): StateFeed {
         threat: snapshot.threat,
         beliefs: snapshot.beliefs,
         resources: snapshot.resources,
+        activity: run.activityByState[state],
       };
     }),
   );

@@ -179,6 +179,51 @@ a {
   background: rgba(255, 255, 255, 0.06);
 }
 
+/* Live agent activity feed (per state). */
+.live-feed {
+  border: 1px solid var(--border);
+  background: var(--bg-inset);
+  padding: 4px 6px;
+  margin-top: 4px;
+  min-height: 20px;
+  max-height: 132px;
+  overflow-y: auto;
+}
+
+.live-feed-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.live-feed-line.live-feed-done {
+  color: var(--text-faint);
+}
+
+.live-feed-line.live-feed-failed {
+  color: var(--red);
+}
+
+.live-feed-role {
+  color: var(--green-dim);
+}
+
+.live-feed-text-done {
+  color: inherit;
+}
+
+.topbar-failure .failure-flag {
+  color: var(--red);
+  font-size: 12px;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+}
+
 .ops-feed-northstar {
   grid-area: northstar;
 }
@@ -554,6 +599,50 @@ option {
 
 .btn-start:active {
   filter: brightness(0.9);
+}
+
+/* Themed action buttons (catalog load, key save, run controls). */
+.btn-theme {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--green);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-bright);
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.btn-theme:hover:not(:disabled) {
+  box-shadow: var(--glow-green);
+  color: var(--bg);
+  background: var(--green);
+}
+
+.btn-theme:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-load-catalogs {
+  align-self: flex-start;
+}
+
+.config-key-row {
+  display: flex;
+  gap: 6px;
+}
+
+.config-key-row input {
+  flex: 1;
+}
+
+.config-problems {
+  margin: -8px 0 0;
+  padding-left: 18px;
+  font-size: 11px;
+  color: var(--amber);
 }
 
 /* ── Placeholder panels (replaced next round) ────────────────────────────── */

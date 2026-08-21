@@ -1,5 +1,5 @@
-import type { AssessmentView, RoleId, SimEvent, StateId } from "../types";
-import { useContacts, useRunControls, useRunMeta, useSelectEvent, useSelectedEvent, useStateFeed, useTimeline, ROLES } from "../store";
+import type { AgentActivityView, AssessmentView, RoleId, SimEvent, StateId } from "../types";
+import { useContacts, useFailure, useRunControls, useRunMeta, useSelectEvent, useSelectedEvent, useStateFeed, useTimeline, ROLES } from "../store";
 import { MapPanel } from "./panels/MapPanel";
 import { Panel } from "./Panel";
 
@@ -53,6 +53,36 @@ function AssessmentBlock({ assessment }: { assessment: AssessmentView }) {
   );
 }
 
+const ROLE_SHORT: Record<RoleId, string> = {
+  head_of_state: "HOS",
+  intelligence_chief: "INT",
+  military_chief: "MIL",
+  diplomat: "DIP",
+};
+
+function LiveFeed({ activity }: { activity: AgentActivityView[] }) {
+  if (activity.length === 0) return null;
+  return (
+    <div className="live-feed" role="log" aria-label="Live agent activity">
+      {activity.slice(-8).map((entry, index) => (
+        <div
+          // Feed lines are append-only telemetry; index keys keep them stable
+          // as the list slides.
+          key={`${entry.turn}-${index}`}
+          className={`live-feed-line${entry.action === "failed" ? " live-feed-failed" : ""}${
+            entry.action.startsWith("done:") ? " live-feed-done" : ""
+          }`}
+        >
+          <span className="live-feed-role">{ROLE_SHORT[entry.role]}</span>{" "}
+          <span className={entry.action.startsWith("done:") ? "live-feed-text-done" : ""}>
+            {entry.action === "failed" ? "CALL FAILED" : entry.action}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function StateFeedPanel({ state }: { state: StateId }) {
   const feed = useStateFeed(state);
   const accent = feed.threat >= 60 ? "red" : feed.threat >= 35 ? "amber" : "green";
@@ -85,6 +115,7 @@ function StateFeedPanel({ state }: { state: StateId }) {
         <span>latest decision</span>
         <span className="decision-line">{feed.decision?.action ?? "—"}</span>
       </div>
+      <LiveFeed activity={feed.activity} />
       {[...feed.assessments].reverse().map((assessment) => (
         <AssessmentBlock key={`${assessment.turn}-${assessment.role}`} assessment={assessment} />
       ))}
@@ -94,6 +125,7 @@ function StateFeedPanel({ state }: { state: StateId }) {
 
 function TopBar() {
   const meta = useRunMeta();
+  const failure = useFailure();
   const { stopRun, resumeRun } = useRunControls();
   return (
     <header className="panel ops-topbar">
@@ -122,6 +154,12 @@ function TopBar() {
         <span className="topbar-label">Status</span>
         <span className={`topbar-value status-${meta.status}`}>{meta.status}</span>
       </div>
+      {failure && (
+        <div className="topbar-item topbar-failure" title={failure}>
+          <span className="topbar-label">Fault</span>
+          <span className="failure-flag">▲ {failure}</span>
+        </div>
+      )}
       {meta.conflict && (
         <div className="topbar-item">
           <span className="topbar-label">Alert</span>

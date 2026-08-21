@@ -1,4 +1,3 @@
-import sqlite3
 from pathlib import Path
 
 import pytest
@@ -61,5 +60,13 @@ def test_persistence_across_reopen(tmp_path: Path) -> None:
 def test_context_manager_closes_connection(tmp_path: Path) -> None:
     with EventStore(tmp_path / "log.db") as store:
         assert store.replay() == []
-    with pytest.raises(sqlite3.ProgrammingError):
+    assert store._conn is None  # noqa: SLF001 - asserting the close contract
+    with pytest.raises(AttributeError):
+        # A closed store's connection is gone; double-close is a no-op.
         store.replay()
+
+
+def test_double_close_is_a_no_op(tmp_path: Path) -> None:
+    store = EventStore(tmp_path / "log.db")
+    store.close()
+    store.close()

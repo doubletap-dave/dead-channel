@@ -1,6 +1,14 @@
 export type StateId = "northstar" | "vesper";
 export type RoleId = "head_of_state" | "intelligence_chief" | "military_chief" | "diplomat";
 
+export interface AgentActivityView {
+  state: StateId;
+  role: RoleId;
+  model: string;
+  action: string;
+  turn: number;
+}
+
 export interface SimEvent {
   seq: number;
   turn: number;
@@ -64,7 +72,9 @@ export interface RunView {
   assessmentsByState: Record<StateId, AssessmentView[]>;
   latestDecisionByState: Record<StateId, DecisionView | null>;
   contacts: ContactView[];
-  status: "config" | "running" | "stopped" | "complete";
+  activityByState: Record<StateId, AgentActivityView[]>;
+  failure: string | null;
+  status: "config" | "running" | "stopped" | "failed" | "complete";
 }
 
 export interface RunConfigView {

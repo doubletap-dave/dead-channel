@@ -60,4 +60,7 @@ class EventStore:
         ]
 
     def close(self) -> None:
+        if not self._conn:
+            return
         self._conn.close()
+        self._conn = None

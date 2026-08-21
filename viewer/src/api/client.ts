@@ -66,6 +66,31 @@ export async function stopRun(runId: string): Promise<StopRunResult> {
 export const PROVIDERS = ["openrouter", "openai", "perplexity"] as const;
 export type ProviderId = (typeof PROVIDERS)[number];
 
+export interface CatalogResult {
+  provider: ProviderId;
+  models: ModelInfoView[];
+  error: string | null;
+}
+
+// Fetch every provider's catalog in parallel; per-provider errors are reported,
+// not thrown — one missing key shouldn't hide the catalogs you *can* load.
+export async function fetchAllCatalogs(): Promise<CatalogResult[]> {
+  const results = await Promise.all(
+    PROVIDERS.map(async (provider): Promise<CatalogResult> => {
+      try {
+        return { provider, models: await fetchCatalogs(provider), error: null };
+      } catch (cause) {
+        return {
+          provider,
+          models: [],
+          error: cause instanceof Error ? cause.message : String(cause),
+        };
+      }
+    }),
+  );
+  return results;
+}
+
 export async function fetchCatalogs(provider: ProviderId): Promise<ModelInfoView[]> {
   const response = await fetch(
     `${API_BASE}/providers/catalogs?provider=${encodeURIComponent(provider)}`,

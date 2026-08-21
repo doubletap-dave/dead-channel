@@ -9,6 +9,8 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from dead_channel.cli import _winjob
+from dead_channel.providers.dotenv import load_dotenv_into
+from dead_channel.providers.keys import KEY_ENV_NAMES
 
 _VIEWER_DIR = Path(__file__).resolve().parents[3] / "viewer"
 if not _VIEWER_DIR.is_dir():  # installed as a package, not a repo checkout
@@ -20,6 +22,11 @@ _CHILDREN: list[subprocess.Popen[bytes]] = []
 
 def _env() -> dict[str, str]:
     env = dict(os.environ)
+    # uvicorn does not read .env; without this, keys set in the UI's .env never
+    # reach pydantic-ai and every run dies on "Set the OPENROUTER_API_KEY...".
+    loaded = load_dotenv_into(env, Path(".env"))
+    if any(env.get(name) for name in KEY_ENV_NAMES.values()):
+        print(f"api keys loaded from .env ({loaded} entries)", flush=True)
     env["PYTHONUTF8"] = "1"
     return env
 

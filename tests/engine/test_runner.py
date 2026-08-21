@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from dead_channel.agents.packets import assemble_packet
+from dead_channel.agents.policy import Role
 from dead_channel.core.config import RunConfig, SimParams
 from dead_channel.core.events import Event, make_event
 from dead_channel.core.rng import SeededRNG
@@ -701,3 +703,45 @@ async def test_contact_events_carry_territory_coordinates(tmp_path: Path) -> Non
         lon, lat = float(contact.payload["lon"]), float(contact.payload["lat"])
         assert min_lon <= lon <= max_lon, f"{lon} outside {about} territory"
         assert min_lat <= lat <= max_lat, f"{lat} outside {about} territory"
+
+
+async def test_every_llm_call_emits_agent_activity(tmp_path: Path) -> None:
+    actions: dict[str, ActionRule] = {"northstar": STAY, "vesper": STAY}
+    _, store = await _run(tmp_path, actions)
+    events = store.replay()
+
+    activity = [event for event in events if event.type == "agent.activity"]
+    assert activity, "LLM calls must emit agent.activity telemetry"
+    starts = [e for e in activity if not str(e.payload["action"]).startswith("done:")]
+    dones = [e for e in activity if str(e.payload["action"]).startswith("done:")]
+    assert len(starts) == len(dones), "every call needs a start and a done"
+    assert all(e.payload["state"] in ("northstar", "vesper") for e in starts)
+    roles = {str(e.payload["role"]) for e in activity}
+    assert roles == {
+        "intelligence_chief",
+        "military_chief",
+        "diplomat",
+        "head_of_state",
+    }, roles
+    assert all(str(e.payload["model"]) for e in activity), "model id must be surfaced"
+
+    # Truth isolation: activity telemetry carries states/roles/models only.
+    for event in activity:
+        assert set(event.payload) <= {"turn", "state", "role", "model", "action", "phase"}
+
+
+async def test_agent_activity_is_visible_in_agent_packets(tmp_path: Path) -> None:
+    """Activity is deliberately observer-visible; packets must not break on it."""
+    actions: dict[str, ActionRule] = {"northstar": STAY, "vesper": STAY}
+    _, store = await _run(tmp_path, actions)
+    events = store.replay()
+    for observer in StateID:
+        packet = assemble_packet(
+            Role.HEAD_OF_STATE,
+            observer,
+            2,
+            events,
+            BeliefState(observer=observer, target=observer, attributes={}),
+            [],
+        )
+        assert packet is not None
