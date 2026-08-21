@@ -1,0 +1,548 @@
+:root {
+  --bg: #0a0e0a;
+  --bg-raised: #0d130d;
+  --bg-inset: #070b07;
+  --border: #1e2a1e;
+  --border-bright: #2e422e;
+  --green: #33ff66;
+  --green-dim: #1f9940;
+  --green-faint: #14532a;
+  --amber: #ffb000;
+  --amber-dim: #8f6200;
+  --red: #ff3b30;
+  --red-dim: #7a1d18;
+  --text: #b8e6c2;
+  --text-dim: #5f8a6a;
+  --text-faint: #3d5c46;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+  --scanline: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.18) 3px
+  );
+  --glow-green: 0 0 6px rgba(51, 255, 102, 0.25);
+  --glow-amber: 0 0 6px rgba(255, 176, 0, 0.3);
+  --glow-red: 0 0 8px rgba(255, 59, 48, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Phosphor scanline overlay + vignette, fixed above content, click-through. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: var(--scanline);
+  opacity: 0.5;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0) 55%,
+    rgba(0, 0, 0, 0.45) 100%
+  );
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  color: var(--green);
+  text-shadow: var(--glow-green);
+  margin: 0;
+}
+
+a {
+  color: var(--green);
+}
+
+::selection {
+  background: var(--green-faint);
+  color: var(--green);
+}
+
+/* ── Panel frame ─────────────────────────────────────────────────────────── */
+
+.panel {
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.panel-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--green);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 10px;
+  flex: none;
+  user-select: none;
+}
+
+.panel-accent-amber .panel-title {
+  color: var(--amber);
+}
+
+.panel-accent-red .panel-title {
+  color: var(--red);
+}
+
+.panel-body {
+  padding: 8px 10px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+/* ── OpsRoom grid ────────────────────────────────────────────────────────── */
+
+.ops-room {
+  display: grid;
+  min-height: 100vh;
+  gap: 6px;
+  padding: 6px;
+  grid-template-columns: minmax(260px, 1fr) minmax(320px, 2fr) minmax(260px, 1fr);
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "topbar topbar topbar"
+    "northstar map vesper"
+    "timeline timeline timeline";
+  height: 100vh;
+}
+
+.ops-topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 8px 14px;
+}
+
+.ops-map {
+  grid-area: map;
+}
+
+.ops-feed-northstar {
+  grid-area: northstar;
+}
+
+.ops-feed-vesper {
+  grid-area: vesper;
+}
+
+.ops-timeline {
+  grid-area: timeline;
+  max-height: 26vh;
+}
+
+/* ── Top bar widgets ─────────────────────────────────────────────────────── */
+
+.topbar-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.topbar-label {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.topbar-value {
+  font-size: 15px;
+  color: var(--green);
+  text-shadow: var(--glow-green);
+}
+
+.topbar-spacer {
+  flex: 1;
+}
+
+.defcon-meter {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+}
+
+.defcon-seg {
+  width: 22px;
+  height: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-inset);
+}
+
+.defcon-seg.on-5,
+.defcon-seg.on-4 {
+  background: var(--green-dim);
+  border-color: var(--green-dim);
+}
+
+.defcon-seg.on-3 {
+  background: var(--amber);
+  border-color: var(--amber);
+  box-shadow: var(--glow-amber);
+}
+
+.defcon-seg.on-2,
+.defcon-seg.on-1 {
+  background: var(--red);
+  border-color: var(--red);
+  box-shadow: var(--glow-red);
+}
+
+.defcon-seg:not(.on) {
+  opacity: 0.35;
+}
+
+.status-running {
+  color: var(--green);
+}
+
+.status-complete {
+  color: var(--amber);
+}
+
+.status-config {
+  color: var(--text-dim);
+}
+
+.conflict-flag {
+  color: var(--red);
+  text-shadow: var(--glow-red);
+  animation: blink 1.2s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* ── Feed content ────────────────────────────────────────────────────────── */
+
+.feed-block {
+  border-bottom: 1px dashed var(--border);
+  padding: 6px 0;
+}
+
+.feed-block:last-child {
+  border-bottom: none;
+}
+
+.feed-role {
+  color: var(--green);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.feed-role::before {
+  content: "▸ ";
+  color: var(--green-dim);
+}
+
+.feed-turn {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.feed-text {
+  margin: 2px 0 0;
+  color: var(--text);
+}
+
+.feed-dissent {
+  margin: 3px 0 0;
+  color: var(--amber);
+  font-size: 12px;
+}
+
+.feed-dissent::before {
+  content: "△ DISSENT: ";
+  letter-spacing: 0.08em;
+  font-size: 10px;
+}
+
+.urgency {
+  letter-spacing: 0.15em;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.urgency-hot {
+  color: var(--red);
+  text-shadow: var(--glow-red);
+}
+
+.urgency-warm {
+  color: var(--amber);
+  text-shadow: var(--glow-amber);
+}
+
+.claim {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.claim b {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.decision-line {
+  color: var(--green);
+}
+
+.decision-line::before {
+  content: "⇒ ";
+  color: var(--green-dim);
+}
+
+.threat-line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+/* ── Timeline ────────────────────────────────────────────────────────────── */
+
+.timeline-row {
+  appearance: none;
+  background: transparent;
+  border: none;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+  display: flex;
+  gap: 10px;
+  padding: 2px 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+
+.timeline-row:hover {
+  background: var(--green-faint);
+}
+
+.timeline-row.selected {
+  background: var(--green-faint);
+  color: var(--green);
+}
+
+.timeline-seq {
+  color: var(--text-faint);
+  width: 4ch;
+  text-align: right;
+}
+
+.timeline-turn {
+  width: 5ch;
+}
+
+.event-type-report\.rendered {
+  color: var(--text);
+}
+
+.event-type-assessment\.made {
+  color: var(--green);
+}
+
+.event-type-decision\.made {
+  color: var(--amber);
+}
+
+.event-type-threat\.updated {
+  color: var(--amber-dim);
+}
+
+.event-type-message\.sent {
+  color: var(--text);
+}
+
+.event-type-contact\.detected {
+  color: var(--amber);
+}
+
+.event-type-conflict\.threshold_crossed,
+.event-type-run\.ended {
+  color: var(--red);
+}
+
+.payload-view {
+  border: 1px solid var(--border-bright);
+  background: var(--bg-inset);
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--green);
+  font-size: 12px;
+}
+
+/* ── Config screen ───────────────────────────────────────────────────────── */
+
+.config-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.config-panel {
+  width: min(720px, 100%);
+  max-height: 92vh;
+}
+
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 6px;
+}
+
+.config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.config-field-label {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.config-row {
+  display: flex;
+  gap: 16px;
+}
+
+.config-row > .config-field {
+  flex: 1;
+}
+
+.config-state {
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  background: var(--bg-inset);
+}
+
+.config-state > summary {
+  cursor: pointer;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: var(--green);
+  user-select: none;
+}
+
+.config-state-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  padding-top: 10px;
+}
+
+input[type="number"],
+input[type="text"],
+select {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--green);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  outline: none;
+  width: 100%;
+}
+
+input:focus,
+select:focus {
+  border-color: var(--green-dim);
+  box-shadow: var(--glow-green);
+}
+
+select {
+  appearance: none;
+}
+
+option {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.btn-start {
+  align-self: flex-start;
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--bg);
+  background: var(--green);
+  border: 1px solid var(--green);
+  padding: 10px 28px;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.btn-start:hover {
+  box-shadow: var(--glow-green);
+  filter: brightness(1.1);
+}
+
+.btn-start:active {
+  filter: brightness(0.9);
+}
+
+/* ── Placeholder panels (replaced next round) ────────────────────────────── */
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: var(--text-faint);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.placeholder-map {
+  height: 100%;
+}
