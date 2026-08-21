@@ -11,6 +11,7 @@ venv/
 # Environment / secrets
 .env
 .env.*
+!.env.example
 
 # Node
 node_modules/
