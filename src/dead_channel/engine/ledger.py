@@ -80,6 +80,14 @@ class Ledger:
         self._records[claim_id] = scored
         return scored
 
+    def mark_scored(self, claim_id: str, outcome: float, scored_turn: int) -> None:
+        record = self._records[claim_id]
+        if record.status == "scored":
+            raise ValueError(f"claim {claim_id} already adjudicated")
+        self._records[claim_id] = record.model_copy(
+            update={"status": "scored", "outcome": outcome, "scored_turn": scored_turn}
+        )
+
     def _score(
         self, record: ClaimRecord, realized: float, direction_realized: Direction | None
     ) -> float:

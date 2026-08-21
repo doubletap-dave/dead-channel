@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS events (
 
 class EventStore:
     def __init__(self, path: Path) -> None:
+        self.path = path
         self._conn = sqlite3.connect(path)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute(_SCHEMA)

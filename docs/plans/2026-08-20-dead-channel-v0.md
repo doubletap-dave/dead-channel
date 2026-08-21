@@ -70,12 +70,14 @@ Files:
 # tests/core/test_rng.py
 from dead_channel.core.rng import SeededRNG
 
+
 def test_substreams_are_deterministic_and_independent():
     a, b = SeededRNG(7), SeededRNG(7)
     sa, sb = a.stream("obs", turn=1), b.stream("obs", turn=1)
     assert [sa.gauss(0, 1) for _ in range(5)] == [sb.gauss(0, 1) for _ in range(5)]
     other = SeededRNG(7).stream("obs", turn=2)
     assert [other.gauss(0, 1) for _ in range(5)] != [sb.gauss(0, 1) for _ in range(5)]
+
 
 def test_named_streams_independent_same_turn():
     r = SeededRNG(1)
@@ -88,13 +90,16 @@ def test_named_streams_independent_same_turn():
 # tests/core/test_events.py
 from dead_channel.core.events import Event, make_event
 
+
 def test_event_roundtrip_and_ordering():
     e = make_event("threat.updated", turn=3, state="northstar", threat=41.0, drivers={})
     assert e.type == "threat.updated" and e.turn == 3
     assert Event.model_validate(e.model_dump()).payload == e.payload
 
+
 def test_unknown_event_type_rejected():
     import pytest, pydantic
+
     with pytest.raises(ValueError):
         make_event("nukes.launched", turn=1)
 ```
@@ -106,50 +111,77 @@ def test_unknown_event_type_rejected():
 from enum import StrEnum
 import pydantic
 
+
 class ResourceKind(StrEnum):
-    ECONOMY = "economy"; ENERGY = "energy"; FOOD = "food"
-    MILITARY = "military"; RESEARCH = "research"
+    ECONOMY = "economy"
+    ENERGY = "energy"
+    FOOD = "food"
+    MILITARY = "military"
+    RESEARCH = "research"
+
 
 class IntelSource(StrEnum):
-    SIGINT = "sigint"; IMINT = "imint"; HUMINT = "humint"
-    OSINT = "osint"; DEFECTOR = "defector"
+    SIGINT = "sigint"
+    IMINT = "imint"
+    HUMINT = "humint"
+    OSINT = "osint"
+    DEFECTOR = "defector"
+
 
 class StateID(StrEnum):
-    NORTHSTAR = "northstar"; VESPER = "vesper"
+    NORTHSTAR = "northstar"
+    VESPER = "vesper"
+
 
 class ActionKind(StrEnum):  # 19 actions
-    RAISE_READINESS = "raise_readiness"; LOWER_READINESS = "lower_readiness"
-    REPOSITION_FORCES = "reposition_forces"; CONDUCT_EXERCISE = "conduct_exercise"
+    RAISE_READINESS = "raise_readiness"
+    LOWER_READINESS = "lower_readiness"
+    REPOSITION_FORCES = "reposition_forces"
+    CONDUCT_EXERCISE = "conduct_exercise"
     COVERT_MOBILIZATION = "covert_mobilization"
-    INCREASE_SURVEILLANCE = "increase_surveillance"; VERIFY_REPORT = "verify_report"
-    PLANT_FALSE_INTEL = "plant_false_intel"; ATTEMPT_INFILTRATION = "attempt_infiltration"
-    REASSURE = "reassure"; THREATEN = "threaten"; PROPOSE_AGREEMENT = "propose_agreement"
-    ACCUSE = "accuse"; REQUEST_CLARIFICATION = "request_clarification"; STAY_SILENT = "stay_silent"
-    INVEST_MILITARY = "invest_military"; INVEST_RESEARCH = "invest_research"
-    INVEST_ECONOMY = "invest_economy"; STOCKPILE = "stockpile"
-    SANCTION = "sanction"; OFFER_TRADE = "offer_trade"
+    INCREASE_SURVEILLANCE = "increase_surveillance"
+    VERIFY_REPORT = "verify_report"
+    PLANT_FALSE_INTEL = "plant_false_intel"
+    ATTEMPT_INFILTRATION = "attempt_infiltration"
+    REASSURE = "reassure"
+    THREATEN = "threaten"
+    PROPOSE_AGREEMENT = "propose_agreement"
+    ACCUSE = "accuse"
+    REQUEST_CLARIFICATION = "request_clarification"
+    STAY_SILENT = "stay_silent"
+    INVEST_MILITARY = "invest_military"
+    INVEST_RESEARCH = "invest_research"
+    INVEST_ECONOMY = "invest_economy"
+    STOCKPILE = "stockpile"
+    SANCTION = "sanction"
+    OFFER_TRADE = "offer_trade"
+
 
 class ActionSpec(pydantic.BaseModel):
     kind: ActionKind
     params: dict[str, float | str] = {}
 
+
 class Claim(pydantic.BaseModel):
-    subject: str            # e.g. "vesper.readiness"
-    direction: str          # "rising" | "falling" | "stable" | "hostile_intent" | "deception"
+    subject: str  # e.g. "vesper.readiness"
+    direction: str  # "rising" | "falling" | "stable" | "hostile_intent" | "deception"
     magnitude: float = 0.0  # claimed size of change, 0-100 scale
     horizon_turns: int = 3
 
+
 class Assessment(pydantic.BaseModel):
     role: str
-    interpretation: str     # 2-3 operational sentences, NOT chain-of-thought
+    interpretation: str  # 2-3 operational sentences, NOT chain-of-thought
     claim: Claim
     recommended_action: ActionSpec
-    urgency: int            # 1-5
+    urgency: int  # 1-5
     dissent: str | None = None
+
 
 class Decision(pydantic.BaseModel):
     action: ActionSpec
     rationale: str
+
 
 class CountryState(pydantic.BaseModel):
     resources: dict[ResourceKind, float]
@@ -157,29 +189,33 @@ class CountryState(pydantic.BaseModel):
     stability: float
     intelligence_capability: float
     diplomatic_credibility: float
-    concealment: float = 0.0   # counter-intel posture, raises enemy noise
+    concealment: float = 0.0  # counter-intel posture, raises enemy noise
+
 
 class TrueWorld(pydantic.BaseModel):
     turn: int = 0
     countries: dict[StateID, CountryState]
 
+
 class IntelPayload(pydantic.BaseModel):
-    attribute: str          # e.g. "readiness"
+    attribute: str  # e.g. "readiness"
     value: float
-    confidence: float       # 0-1
+    confidence: float  # 0-1
     age_turns: int
     source: IntelSource
     about: StateID
-    planted: bool = False   # internal; stripped from agent packets by policy
+    planted: bool = False  # internal; stripped from agent packets by policy
 ```
 
 ```python
 # src/dead_channel/core/rng.py
 import hashlib, random
 
+
 class SeededRNG:
     def __init__(self, seed: int):
         self.seed = seed
+
     def stream(self, name: str, turn: int = 0, **scope) -> random.Random:
         key = f"{self.seed}:{name}:{turn}:" + ":".join(f"{k}={v}" for k, v in sorted(scope.items()))
         derived = int.from_bytes(hashlib.sha256(key.encode()).digest()[:8], "big")
@@ -191,12 +227,25 @@ class SeededRNG:
 import pydantic
 
 EVENT_TYPES = {
-    "run.started", "turn.started", "world.ticked", "observation.generated",
-    "report.rendered", "assessment.made", "decision.made", "effect.applied",
-    "threat.updated", "claim.scored", "message.sent", "contact.detected",
-    "deception.planted", "agreement.formed", "agreement.violated",
-    "conflict.threshold_crossed", "run.ended",
+    "run.started",
+    "turn.started",
+    "world.ticked",
+    "observation.generated",
+    "report.rendered",
+    "assessment.made",
+    "decision.made",
+    "effect.applied",
+    "threat.updated",
+    "claim.scored",
+    "message.sent",
+    "contact.detected",
+    "deception.planted",
+    "agreement.formed",
+    "agreement.violated",
+    "conflict.threshold_crossed",
+    "run.ended",
 }
+
 
 class Event(pydantic.BaseModel):
     seq: int
@@ -210,6 +259,7 @@ class Event(pydantic.BaseModel):
         if v not in EVENT_TYPES:
             raise ValueError(f"unknown event type: {v}")
         return v
+
 
 def make_event(type: str, *, seq: int = 0, turn: int, **payload) -> Event:
     return Event(seq=seq, turn=turn, type=type, payload=payload)

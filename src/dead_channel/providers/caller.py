@@ -1,7 +1,8 @@
 """The single LLM call site: structured calls, prompt persistence, test doubles.
 
-Every LLM interaction in Dead Channel routes through a `Caller`. Prompts are
-persisted per AGENTS.md prime directive 4; PydanticAI is used only here.
+Every LLM interaction routes through a `Caller`. Live runs use PydanticAICaller
+with per-model sampling rules; tests use RecordingCaller or pydantic-ai's
+TestModel. Prompts are persisted per AGENTS.md prime directive 4.
 """
 
 import json
@@ -15,11 +16,19 @@ from typing import Protocol, TypeVar, cast
 import pydantic_ai
 import pydantic_core
 from pydantic_ai.models import Model
+from pydantic_ai.output import PromptedOutput
+
+from dead_channel.providers.catalog import ModelInfo, fetch_catalog
+from dead_channel.providers.sampling import resolve_sampling
 
 T = TypeVar("T")
 
 _PROMPTS_SUBDIR = "prompts"
 _RETRIES = 2
+# Providers whose models commonly lack reliable tool-call structured output;
+# they get JSON-schema-in-prompt instead of pydantic-ai's default tool output.
+_PROMPTED_OUTPUT_PROVIDERS = frozenset({"openrouter", "perplexity"})
+_CACHE_TTL_SECONDS = 300.0
 
 
 class Caller(Protocol):
@@ -28,17 +37,51 @@ class Caller(Protocol):
     ) -> Awaitable[T]: ...
 
 
-class PydanticAICaller:
-    """Structured-output caller; agents are constructed per call to avoid state bleed."""
+def _provider_of(model_str: str) -> str:
+    return model_str.split(":", 1)[0]
 
-    def __init__(self, model_resolver: Callable[[str], Model | str] = lambda m: m) -> None:
-        self._model_resolver = model_resolver
+
+class PydanticAICaller:
+    """Structured-output caller; agents are constructed per call to avoid state bleed.
+
+    Sampling settings are resolved per model (temperature only where the model
+    accepts it) and cached briefly so catalogs aren't refetched every call.
+    """
+
+    def __init__(self, model_resolver: Callable[[str], Model | str] | None = None) -> None:
+        self._model_resolver = model_resolver or (lambda m: m)
+        self._sampling_cache: dict[str, tuple[float, dict[str, object]]] = {}
+
+    @staticmethod
+    def _output_spec(model_str: str, result_type: type[object]) -> object:
+        if _provider_of(model_str) in _PROMPTED_OUTPUT_PROVIDERS and result_type is not str:
+            return PromptedOutput(result_type)
+        return result_type
+
+    async def _settings_for(self, model_str: str) -> dict[str, object]:
+        import time
+
+        cached = self._sampling_cache.get(model_str)
+        if cached is not None and time.monotonic() - cached[0] < _CACHE_TTL_SECONDS:
+            return cached[1]
+        entry: ModelInfo | None = None
+        provider = _provider_of(model_str)
+        if provider in ("openai", "openrouter"):
+            try:
+                catalog = await fetch_catalog(provider)
+                entry = next((info for info in catalog if info.id == model_str), None)
+            except Exception:  # noqa: BLE001 - missing metadata degrades to defaults
+                entry = None
+        settings = await resolve_sampling(model_str, catalog_entry=entry)
+        self._sampling_cache[model_str] = (time.monotonic(), settings)
+        return settings
 
     async def call(self, model_str: str, result_type: type[T], prompt: str, call_site: str) -> T:
         agent = pydantic_ai.Agent(
             self._model_resolver(model_str),
-            output_type=result_type,
+            output_type=self._output_spec(model_str, result_type),
             retries=_RETRIES,
+            model_settings=await self._settings_for(model_str),
         )
         result = await agent.run(prompt)
         return cast(T, result.output)

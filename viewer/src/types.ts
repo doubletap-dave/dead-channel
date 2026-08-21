@@ -64,7 +64,7 @@ export interface RunView {
   assessmentsByState: Record<StateId, AssessmentView[]>;
   latestDecisionByState: Record<StateId, DecisionView | null>;
   contacts: ContactView[];
-  status: "config" | "running" | "complete";
+  status: "config" | "running" | "stopped" | "complete";
 }
 
 export interface RunConfigView {

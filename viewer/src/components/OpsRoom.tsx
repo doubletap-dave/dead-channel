@@ -1,5 +1,6 @@
 import type { AssessmentView, RoleId, SimEvent, StateId } from "../types";
-import { useContacts, useRunMeta, useSelectEvent, useSelectedEvent, useStateFeed, useTimeline, ROLES } from "../store";
+import { useContacts, useRunControls, useRunMeta, useSelectEvent, useSelectedEvent, useStateFeed, useTimeline, ROLES } from "../store";
+import { MapPanel } from "./panels/MapPanel";
 import { Panel } from "./Panel";
 
 const ROLE_LABEL: Record<RoleId, string> = {
@@ -8,13 +9,6 @@ const ROLE_LABEL: Record<RoleId, string> = {
   military_chief: "Mil Chief",
   diplomat: "Diplomat",
 };
-
-// TODO(next-round): replace with the real MapPanel (panels/MapPanel.tsx).
-const MapPanel = () => (
-  <Panel title="Theatre Map" accent="green" className="ops-map">
-    <div className="placeholder placeholder-map">MAP</div>
-  </Panel>
-);
 
 // TODO(next-round): replace with the real EventDrawer (panels/EventDrawer.tsx).
 const EventDrawer = () => {
@@ -100,6 +94,7 @@ function StateFeedPanel({ state }: { state: StateId }) {
 
 function TopBar() {
   const meta = useRunMeta();
+  const { stopRun, resumeRun } = useRunControls();
   return (
     <header className="panel ops-topbar">
       <div className="topbar-item">
@@ -133,6 +128,16 @@ function TopBar() {
           <span className="conflict-flag">■ CONFLICT</span>
         </div>
       )}
+      {meta.status === "running" && (
+        <button type="button" className="btn-run-control" onClick={() => void stopRun()}>
+          ■ stop
+        </button>
+      )}
+      {meta.status === "stopped" && (
+        <button type="button" className="btn-run-control" onClick={resumeRun}>
+          ▶ resume
+        </button>
+      )}
       <div className="topbar-spacer" />
     </header>
   );
@@ -164,11 +169,12 @@ function TimelinePanel() {
 }
 
 export function OpsRoom() {
+  const contacts = useContacts();
   return (
     <div className="ops-room">
       <TopBar />
       <StateFeedPanel state="northstar" />
-      <MapPanel />
+      <MapPanel contacts={contacts} />
       <StateFeedPanel state="vesper" />
       <TimelinePanel />
     </div>

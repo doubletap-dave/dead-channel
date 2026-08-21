@@ -12,6 +12,9 @@ from dead_channel.core.types import Assessment, StateID
 from dead_channel.engine.beliefs import BeliefState
 from dead_channel.engine.ledger import ClaimRecord
 
+# Hidden true-state attributes never reach agent packets, regardless of state scoping.
+HIDDEN_EFFECT_ATTRIBUTES = frozenset({"concealment"})
+
 
 class AgentPacket(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(frozen=True)
@@ -44,7 +47,15 @@ def assemble_packet(
     assessments: list[Assessment] | None = None,
 ) -> AgentPacket:
     policy = ROLE_POLICY[role]
-    filtered = [event for event in events if visible(role, event, state)]
+    filtered = [
+        event
+        for event in events
+        if visible(role, event, state)
+        and not (
+            event.type == "effect.applied"
+            and event.payload.get("attribute") in HIDDEN_EFFECT_ATTRIBUTES
+        )
+    ]
     redacted = [_redact(event, policy.redact_fields) for event in filtered]
     is_hos = role is Role.HEAD_OF_STATE
     return AgentPacket(

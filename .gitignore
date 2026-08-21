@@ -18,10 +18,8 @@ node_modules/
 dist/
 build/
 
-# Runs (local simulation artifacts)
-runs/*.db
-runs/*.db-wal
-runs/*.db-shm
+# Runs (local simulation artifacts: event logs, prompt archives)
+runs/
 
 # OS / editor
 .DS_Store

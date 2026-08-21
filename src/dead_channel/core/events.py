@@ -3,6 +3,7 @@ import pydantic
 EVENT_TYPES = frozenset[str](
     {
         "run.started",
+        "run.stopped",
         "turn.started",
         "world.ticked",
         "observation.generated",

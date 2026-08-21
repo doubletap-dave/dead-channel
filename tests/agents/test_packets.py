@@ -70,6 +70,17 @@ def enemy_effect(seq: int = 3, turn: int = 2) -> Event:
     )
 
 
+def hidden_effect(seq: int = 7, turn: int = 1) -> Event:
+    return make_event(
+        "effect.applied",
+        seq=seq,
+        turn=turn,
+        state="northstar",
+        attribute="concealment",
+        delta=0.3,
+    )
+
+
 def plant_event(seq: int = 5, turn: int = 3) -> Event:
     return make_event(
         "deception.planted",
@@ -216,6 +227,26 @@ class TestAssembly:
             for event in packet.events:
                 assert "planted" not in event.payload
 
+    def test_hidden_effect_attribute_dropped_for_every_role(self):
+        events = [hidden_effect(), own_effect()]
+        for state in StateID:
+            for role in Role:
+                packet = assemble_packet(role, state, 1, events, None, [])
+                assert all(
+                    event.type != "effect.applied"
+                    or event.payload.get("attribute") != "concealment"
+                    for event in packet.events
+                )
+
+    def test_visible_effect_attribute_still_passes_through(self):
+        packet = assemble_packet(
+            Role.HEAD_OF_STATE, StateID.NORTHSTAR, 2, [own_effect(), hidden_effect()], None, []
+        )
+        effect_events = [event for event in packet.events if event.type == "effect.applied"]
+        assert len(effect_events) == 1
+        assert effect_events[0].payload["attribute"] == "readiness"
+        assert effect_events[0].payload["delta"] == -4.0
+
     def test_redaction_returns_new_event_original_unchanged(self):
         original = planted_report()
         packet = assemble_packet(
@@ -239,6 +270,13 @@ class TestAssembly:
         for role in Role:
             packet = assemble_packet(role, StateID.NORTHSTAR, 3, [planted_report()], None, [])
             assert "planted" not in packet_to_prompt_text(packet).lower()
+
+    def test_concealment_never_in_prompt_text_for_any_role(self):
+        events = [hidden_effect(), own_effect()]
+        for state in StateID:
+            for role in Role:
+                packet = assemble_packet(role, state, 1, events, None, [])
+                assert "concealment" not in packet_to_prompt_text(packet).lower()
 
     def test_intel_chief_sees_plant_suspicion_without_flag(self):
         packet = assemble_packet(

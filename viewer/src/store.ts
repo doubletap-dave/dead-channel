@@ -12,6 +12,7 @@ import type {
   StateId,
   StateSnapshotView,
 } from "./types";
+import { createRun, openStream, startRun as apiStartRun, stopRun as apiStopRun } from "./api/client";
 import { FIXTURE_EVENTS } from "./api/fixtures";
 
 const STATES: readonly StateId[] = ["northstar", "vesper"] as const;
@@ -104,6 +105,10 @@ function reduceEvent(run: RunView, event: SimEvent): RunView {
     }
     case "run.ended": {
       next.status = "complete";
+      break;
+    }
+    case "run.stopped": {
+      next.status = "stopped";
       break;
     }
     case "threat.updated": {
@@ -233,8 +238,28 @@ interface RunStore {
   applyEvent: (event: SimEvent) => void;
   loadFixture: (events: SimEvent[]) => void;
   startRun: (config: RunConfigView) => void;
+  stopRun: () => Promise<void>;
+  resumeRun: () => void;
   selectEvent: (seq: number | null) => void;
 }
+
+let activeStream: EventSource | null = null;
+
+const closeStream = (): void => {
+  activeStream?.close();
+  activeStream = null;
+};
+
+const follow = (runId: string): void => {
+  closeStream();
+  activeStream = openStream(
+    runId,
+    (event) => useRunStore.getState().applyEvent(event),
+    () => {
+      activeStream = null;
+    },
+  );
+};
 
 const useRunStore = create<RunStore>((set) => ({
   run: emptyRun(),
@@ -243,13 +268,43 @@ const useRunStore = create<RunStore>((set) => ({
     set((state) => ({ run: reduceEvent(state.run, event) })),
   loadFixture: (events) =>
     set(() => ({ run: events.reduce(reduceEvent, emptyRun()), selectedEventSeq: null })),
-  startRun: (config) =>
-    set(() => {
-      // TODO(wire-api): POST config to the backend and consume the live SSE
-      // feed via applyEvent; fixture playback stands in until that task lands.
-      void config;
-      return { run: FIXTURE_EVENTS.reduce(reduceEvent, emptyRun()), selectedEventSeq: null };
-    }),
+  startRun: (config) => {
+    closeStream();
+    set(() => ({ run: { ...emptyRun(), status: "running" }, selectedEventSeq: null }));
+    void (async () => {
+      try {
+        const { runId } = await createRun(config);
+        await apiStartRun(runId);
+        follow(runId);
+      } catch (error) {
+        // Backend unreachable: fall back to the built-in fixture so the
+        // ops-room remains demoable without the stack running.
+        console.warn("live backend unavailable, falling back to fixture", error);
+        set(() => ({ run: FIXTURE_EVENTS.reduce(reduceEvent, emptyRun()) }));
+      }
+    })();
+  },
+  stopRun: async () => {
+    const runId = useRunStore.getState().run.runId;
+    if (!runId) return;
+    // The stream stays open until the backend logs run.stopped, which flips
+    // status via reduceEvent — no optimistic status flip here.
+    await apiStopRun(runId).catch((error) => console.warn("stop failed", error));
+  },
+  resumeRun: () => {
+    const { runId } = useRunStore.getState().run;
+    if (!runId) return;
+    set(() => ({ run: { ...useRunStore.getState().run, status: "running" } }));
+    void (async () => {
+      try {
+        await apiStartRun(runId);
+        follow(runId);
+      } catch (error) {
+        console.warn("resume failed", error);
+        set(() => ({ run: { ...useRunStore.getState().run, status: "stopped" } }));
+      }
+    })();
+  },
   selectEvent: (seq) => set(() => ({ selectedEventSeq: seq })),
 }));
 
@@ -324,6 +379,10 @@ export function useSelectEvent(): (seq: number | null) => void {
 
 export function useStartRun(): (config: RunConfigView) => void {
   return useRunStore((state) => state.startRun);
+}
+
+export function useRunControls(): { stopRun: () => Promise<void>; resumeRun: () => void } {
+  return useRunStore(useShallow((state) => ({ stopRun: state.stopRun, resumeRun: state.resumeRun })));
 }
 
 const dispatch = <K extends keyof RunStore>(key: K): RunStore[K] =>

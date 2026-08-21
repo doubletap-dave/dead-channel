@@ -159,6 +159,44 @@ def test_double_adjudication_raises() -> None:
         ledger.adjudicate("c1", realized=50.0, direction_realized=Direction.RISING, turn=6)
 
 
+def test_mark_scored_restores_status_without_rescoring() -> None:
+    ledger = Ledger(SimParams())
+    ledger.open(make_claim(), "analyst", StateID.VESPER, turn=2, claim_id="c1")
+
+    ledger.mark_scored("c1", outcome=0.75, scored_turn=4)
+
+    record = ledger.records_for(StateID.VESPER)[0]
+    assert record.status == "scored"
+    assert record.outcome == pytest.approx(0.75)
+    assert record.scored_turn == 4
+    assert [r.claim_id for r in ledger.open_claims()] == []
+
+
+def test_mark_scored_twice_raises() -> None:
+    ledger = Ledger(SimParams())
+    ledger.open(make_claim(), "analyst", StateID.VESPER, turn=2, claim_id="c1")
+    ledger.mark_scored("c1", outcome=0.5, scored_turn=4)
+
+    with pytest.raises(ValueError):
+        ledger.mark_scored("c1", outcome=0.9, scored_turn=6)
+
+
+def test_mark_scored_unknown_claim_raises() -> None:
+    ledger = Ledger(SimParams())
+
+    with pytest.raises(KeyError):
+        ledger.mark_scored("missing", outcome=0.5, scored_turn=4)
+
+
+def test_mark_scored_blocks_subsequent_adjudication() -> None:
+    ledger = Ledger(SimParams())
+    ledger.open(make_claim(), "analyst", StateID.VESPER, turn=2, claim_id="c1")
+    ledger.mark_scored("c1", outcome=0.5, scored_turn=4)
+
+    with pytest.raises(ValueError):
+        ledger.adjudicate("c1", realized=50.0, direction_realized=Direction.RISING, turn=6)
+
+
 def test_unknown_claim_adjudication_raises() -> None:
     ledger = Ledger(SimParams())
 

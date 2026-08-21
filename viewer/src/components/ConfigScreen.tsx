@@ -1,14 +1,8 @@
 import { useState } from "react";
 import type { RunConfigView, StateId } from "../types";
 import { STATES, useStartRun } from "../store";
+import { ModelCatalog } from "./ModelCatalog";
 import { Panel } from "./Panel";
-
-const MODEL_OPTIONS = [
-  "gpt-5-mini",
-  "gpt-5",
-  "openrouter:anthropic/claude-sonnet-4.5",
-  "perplexity:sonar-pro",
-] as const;
 
 const ROLE_OPTIONS: readonly { id: string; label: string }[] = [
   { id: "head_of_state", label: "Head of State" },
@@ -36,17 +30,13 @@ function MatrixState({ stateId, matrix, onChange }: MatrixStateProps) {
         {ROLE_OPTIONS.map(({ id, label }) => (
           <label className="config-field" key={id}>
             <span className="config-field-label">{label}</span>
-            <select
+            <input
+              type="text"
+              list="models-all"
+              placeholder="(global default)"
               value={overrides[id] ?? ""}
               onChange={(event) => onChange(stateId, id, event.target.value)}
-            >
-              <option value="">(global default)</option>
-              {MODEL_OPTIONS.map((model) => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
-              ))}
-            </select>
+            />
           </label>
         ))}
       </div>
@@ -67,7 +57,7 @@ export function ConfigScreen() {
   const startRun = useStartRun();
   const [seed, setSeed] = useState(1);
   const [turns, setTurns] = useState(40);
-  const [defaultModel, setDefaultModel] = useState<string>(MODEL_OPTIONS[0]);
+  const [defaultModel, setDefaultModel] = useState<string>("");
   const [matrix, setMatrix] = useState<Matrix>({});
 
   const handleStateChange = (stateId: StateId, role: string, model: string) => {
@@ -79,10 +69,11 @@ export function ConfigScreen() {
 
   const handleSubmit = () => {
     if (!Number.isFinite(seed) || !Number.isFinite(turns)) return;
+    if (!defaultModel.trim()) return;
     const config: RunConfigView = {
       seed,
       turns,
-      modelMatrix: { default: defaultModel, states: pruneEmpty(matrix) },
+      modelMatrix: { default: defaultModel.trim(), states: pruneEmpty(matrix) },
     };
     startRun(config);
   };
@@ -122,18 +113,18 @@ export function ConfigScreen() {
           </div>
 
           <label className="config-field">
-            <span className="config-field-label">Global Default Model</span>
-            <select
+            <span className="config-field-label">Global Default Model (provider:model)</span>
+            <input
+              type="text"
+              list="models-all"
+              required
+              placeholder="load a catalog below, then pick or type e.g. openrouter:stealth/ox-alpha"
               value={defaultModel}
               onChange={(event) => setDefaultModel(event.target.value)}
-            >
-              {MODEL_OPTIONS.map((model) => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
-              ))}
-            </select>
+            />
           </label>
+
+          <ModelCatalog />
 
           {STATES.map((stateId) => (
             <MatrixState
@@ -144,7 +135,12 @@ export function ConfigScreen() {
             />
           ))}
 
-          <button className="btn-start" type="submit">
+          <button
+            className="btn-start"
+            type="submit"
+            disabled={!defaultModel.trim()}
+            title="set the global default model to enable"
+          >
             ▶ Start Run
           </button>
         </form>
